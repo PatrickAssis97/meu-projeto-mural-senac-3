@@ -1,0 +1,5 @@
+{
+  "name": "Mural Digital Senac",
+  "description": "A responsive, single-screen digital mural for displaying course information, news, and institutional media for SENAC. The mural updates in real-time with the current date, time, and weather.",
+  "requestFramePermissions": []
+}

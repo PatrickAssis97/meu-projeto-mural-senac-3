@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SENAC Digital Mural</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2d3748; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+
+        /* Entrance Animation for Panels */
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.8s ease-out forwards;
+        }
+
+        /* Carousel Transitions */
+        @keyframes slide-in {
+          from { opacity: 0; transform: translateX(30px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-slide-in { animation: slide-in 0.7s ease-out; }
+        .animate-fade-in { animation: fade-in 1s ease-out; }
+        
+        /* Carousel Progress Bar */
+        @keyframes progress-bar {
+          from { width: 0%; }
+          to { width: 100%; }
+        }
+        .animate-progress-bar {
+          animation: progress-bar linear forwards;
+        }
+
+        /* Urgent News Flash Animation */
+        @keyframes flash-red {
+          0%, 100% {
+            border-color: #f58220;
+          }
+          50% {
+            border-color: #ef4444; /* red-500 */
+          }
+        }
+        .animate-flash-red {
+          animation: flash-red 1.5s infinite;
+          border-width: 2px;
+        }
+        
+        /* Drag and Drop Highlight */
+        .drag-over {
+          outline: 2px dashed #f58220;
+          outline-offset: -4px;
+          transform: scale(0.98);
+          background-color: rgba(245, 130, 32, 0.1);
+          transition: transform 0.2s ease-out, background-color 0.2s ease-out;
+        }
+
+        /* News Content Styling */
+        .news-content ul, .news-content ol {
+          list-style-position: inside;
+          text-align: left;
+          margin-top: 0.5rem;
+          margin-bottom: 0.5rem;
+          padding-left: 1rem;
+        }
+        .news-content li {
+          margin-bottom: 0.25rem;
+        }
+        .news-content a {
+          color: #f58220;
+          text-decoration: underline;
+          font-weight: bold;
+          transition: all 0.2s ease-out;
+          position: relative;
+          display: inline-block;
+        }
+        .news-content a:hover {
+          color: #f89d4d;
+          transform: translateY(-2px);
+          text-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
