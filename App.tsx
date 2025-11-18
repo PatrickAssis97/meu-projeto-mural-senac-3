@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Mural from './components/Mural';
 import AdminLogin from './components/AdminLogin';
 import AdminPanel from './components/AdminPanel';
@@ -60,9 +60,54 @@ const App: React.FC = () => {
     setIsDataLoaded(true);
   }, []);
 
-  // Save mural data whenever it changes
+  // --- Automatic Update Logic ---
+  // This effect listens for changes in localStorage (cross-tab) and polls for changes
+  // to ensure the Mural view is always up to date without refreshing.
+  useEffect(() => {
+    // Function to check and update state if data on disk is different
+    const checkForUpdates = () => {
+      // We only auto-update if we are NOT actively editing as admin in the panel.
+      // If we are in Mural View (even if logged in) or totally logged out (public kiosk), we update.
+      if (isLoggedIn && !isViewingMural) return;
+
+      const savedData = loadData();
+
+      // Helper to deep compare (simple JSON stringify is sufficient here)
+      const hasChanged = (current: any, incoming: any) => JSON.stringify(current) !== JSON.stringify(incoming);
+
+      if (hasChanged(openEnrollments, savedData.openEnrollments)) setOpenEnrollments(savedData.openEnrollments);
+      if (hasChanged(ongoingCourses, savedData.ongoingCourses)) setOngoingCourses(savedData.ongoingCourses);
+      if (hasChanged(newsItems, savedData.newsItems)) setNewsItems(savedData.newsItems);
+      if (hasChanged(videoUrls, savedData.videoUrls)) setVideoUrls(savedData.videoUrls);
+      if (hasChanged(settings, savedData.settings)) setSettings(savedData.settings);
+      
+      // Also check for user updates if needed, though less critical for the display
+      const savedUsers = loadUsers();
+      if (hasChanged(users, savedUsers)) setUsers(savedUsers);
+    };
+
+    // 1. Event Listener for Cross-Tab updates (Instant)
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key === 'senacMuralData' || event.key === 'senacMuralUsers') {
+        checkForUpdates();
+      }
+    };
+    window.addEventListener('storage', handleStorageEvent);
+
+    // 2. Polling Interval (Backup for same-tab or scenarios where event might miss)
+    const intervalId = setInterval(checkForUpdates, 3000); // Check every 3 seconds
+
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent);
+      clearInterval(intervalId);
+    };
+  }, [isLoggedIn, isViewingMural, openEnrollments, ongoingCourses, newsItems, videoUrls, settings, users]);
+
+
+  // Save mural data whenever it changes (Only if WE changed it via state, prevents loops via isDataLoaded check)
   useEffect(() => {
     if (isDataLoaded) { 
+      // We save to localStorage. note: This triggers 'storage' event on OTHER tabs, but not the current one.
       saveData({ openEnrollments, ongoingCourses, newsItems, videoUrls, settings });
     }
   }, [isDataLoaded, openEnrollments, ongoingCourses, newsItems, videoUrls, settings]);
