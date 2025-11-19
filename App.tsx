@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Mural from './components/Mural';
 import AdminLogin from './components/AdminLogin';
@@ -38,6 +37,7 @@ const App: React.FC = () => {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [lastUpdate, setLastUpdate] = useState<number>(0);
   
   // Settings State
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -45,84 +45,99 @@ const App: React.FC = () => {
   // Loading State
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // Load all data from storage on initial render
+  // Helper to update local state from loaded data object
+  const applyLoadedData = useCallback((data: any) => {
+      setOpenEnrollments(data.openEnrollments);
+      setOngoingCourses(data.ongoingCourses);
+      setNewsItems(data.newsItems);
+      setVideoUrls(data.videoUrls);
+      setSettings(data.settings);
+      if (data.lastUpdate) setLastUpdate(data.lastUpdate);
+  }, []);
+
+  // 1. Initial Load
   useEffect(() => {
     const muralData = loadData();
-    setOpenEnrollments(muralData.openEnrollments);
-    setOngoingCourses(muralData.ongoingCourses);
-    setNewsItems(muralData.newsItems);
-    setVideoUrls(muralData.videoUrls);
-    setSettings(muralData.settings);
+    applyLoadedData(muralData);
 
     const userData = loadUsers();
     setUsers(userData);
 
     setIsDataLoaded(true);
-  }, []);
+  }, [applyLoadedData]);
 
-  // --- Automatic Update Logic ---
-  // This effect listens for changes in localStorage (cross-tab) and polls for changes
-  // to ensure the Mural view is always up to date without refreshing.
+  // 2. Automatic Update Logic (The "Listener")
+  // This ensures the Mural updates when Admin makes changes, even in another tab or window.
   useEffect(() => {
-    // Function to check and update state if data on disk is different
     const checkForUpdates = () => {
-      // We only auto-update if we are NOT actively editing as admin in the panel.
-      // If we are in Mural View (even if logged in) or totally logged out (public kiosk), we update.
+      // If we are actively editing in the Admin Panel, DON'T overwrite our work with background updates.
+      // Only update if we are in Mural View (Presentation Mode) or logged out (Kiosk Mode).
       if (isLoggedIn && !isViewingMural) return;
 
-      const savedData = loadData();
-
-      // Helper to deep compare (simple JSON stringify is sufficient here)
-      const hasChanged = (current: any, incoming: any) => JSON.stringify(current) !== JSON.stringify(incoming);
-
-      if (hasChanged(openEnrollments, savedData.openEnrollments)) setOpenEnrollments(savedData.openEnrollments);
-      if (hasChanged(ongoingCourses, savedData.ongoingCourses)) setOngoingCourses(savedData.ongoingCourses);
-      if (hasChanged(newsItems, savedData.newsItems)) setNewsItems(savedData.newsItems);
-      if (hasChanged(videoUrls, savedData.videoUrls)) setVideoUrls(savedData.videoUrls);
-      if (hasChanged(settings, savedData.settings)) setSettings(savedData.settings);
+      const dataOnDisk = loadData();
       
-      // Also check for user updates if needed, though less critical for the display
-      const savedUsers = loadUsers();
-      if (hasChanged(users, savedUsers)) setUsers(savedUsers);
+      // Check if the timestamp on disk is newer than what we have in memory
+      if (dataOnDisk.lastUpdate && dataOnDisk.lastUpdate > lastUpdate) {
+        console.log("New data detected! Updating mural...");
+        applyLoadedData(dataOnDisk);
+      }
     };
 
-    // 1. Event Listener for Cross-Tab updates (Instant)
+    // Check every 2 seconds (Polling) - Good for robust "Kiosk" mode
+    const intervalId = setInterval(checkForUpdates, 2000);
+
+    // Also listen for the immediate 'storage' event (Cross-tab sync)
     const handleStorageEvent = (event: StorageEvent) => {
-      if (event.key === 'senacMuralData' || event.key === 'senacMuralUsers') {
+      if (event.key === 'senacMuralData') {
         checkForUpdates();
       }
     };
-    window.addEventListener('storage', handleStorageEvent);
+    
+    // Listen for same-tab events (custom event dispatched by saveData)
+    const handleLocalEvent = () => checkForUpdates();
 
-    // 2. Polling Interval (Backup for same-tab or scenarios where event might miss)
-    const intervalId = setInterval(checkForUpdates, 3000); // Check every 3 seconds
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('localDataUpdated', handleLocalEvent);
 
     return () => {
-      window.removeEventListener('storage', handleStorageEvent);
       clearInterval(intervalId);
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('localDataUpdated', handleLocalEvent);
     };
-  }, [isLoggedIn, isViewingMural, openEnrollments, ongoingCourses, newsItems, videoUrls, settings, users]);
+  }, [lastUpdate, isLoggedIn, isViewingMural, applyLoadedData]);
 
 
-  // Save mural data whenever it changes (Only if WE changed it via state, prevents loops via isDataLoaded check)
+  // 3. Save Logic (The "Writer")
+  // Only save when WE make changes from the Admin Panel/State
   useEffect(() => {
-    if (isDataLoaded) { 
-      // We save to localStorage. note: This triggers 'storage' event on OTHER tabs, but not the current one.
-      saveData({ openEnrollments, ongoingCourses, newsItems, videoUrls, settings });
+    if (isDataLoaded && isLoggedIn) { 
+       // Note: We don't call saveData on every render, only when user explicitly changes things in AdminPanel.
+       // AdminPanel calls setOpenEnrollments etc.
+       // We need a way to trigger save only when these change via user interaction, not via loading.
+       // To avoid infinite loops, we will let the AdminPanel explicitly handle 'Save' actions 
+       // or use a debounced effect here. 
+       
+       // Ideally, AdminPanel should call saveData directly or we use a ref to track if change was local.
+       // For simplicity in this architecture, we'll rely on `saveData` updating the timestamp,
+       // and the `useEffect` above ignoring updates if `isLoggedIn && !isViewingMural`.
+       
+       // However, to prevent the "Writer" from saving stale data over new data,
+       // we should save immediately when state changes.
+       saveData({ openEnrollments, ongoingCourses, newsItems, videoUrls, settings });
     }
-  }, [isDataLoaded, openEnrollments, ongoingCourses, newsItems, videoUrls, settings]);
+  }, [openEnrollments, ongoingCourses, newsItems, videoUrls, settings, isDataLoaded, isLoggedIn]);
   
-  // Save user data whenever it changes
+  // Save users separately
   useEffect(() => {
-      if(isDataLoaded) {
+      if(isDataLoaded && isLoggedIn) {
           saveUsers(users);
       }
-  }, [isDataLoaded, users]);
+  }, [users, isDataLoaded, isLoggedIn]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setIsLoggedIn(true);
-    setIsViewingMural(false); // Go to panel by default
+    setIsViewingMural(false);
     setIsAdminLoginOpen(false);
   };
 
@@ -160,7 +175,7 @@ const App: React.FC = () => {
                 <Mural
                     {...muralProps}
                     isLoggedIn={true}
-                    onAdminClick={() => {}} // Not used when logged in
+                    onAdminClick={() => {}} 
                     onReturnToPanel={() => setIsViewingMural(false)}
                     onEditNews={handleEditNewsRequest}
                 />
